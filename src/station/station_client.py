@@ -19,12 +19,12 @@ print(f"id(parking_lot_states): {id(parking_lot_states):x}")
 #   parking_system_name/parking_id/section/
 #
 # Example
-#   pk_ps/uds/science/
+#   pk_ps/uds/sciences/
 #     pk_ps:    It's the name of our parking system. It will not change. This is mainly to identify
 #               our topic given that for this demo we are using a public broker.
 #     uds:      An id assigned to the owner of the parking lot (or just the parking lot as is).
 #               An owner/parking lot can have different sections/levels under their control.
-#     science:  The specific section/level inside the parking lot we are interested in. For example,
+#     sciences:  The specific section/level inside the parking lot we are interested in. For example,
 #               the university has different sections: faculty of science, school of administration,
 #               the stadium, the faculty of engineering, etc.
 

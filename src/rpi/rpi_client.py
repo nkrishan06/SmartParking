@@ -1,22 +1,26 @@
 #!/usr/bin/python
-import time
+
 import RPi.GPIO as GPIO
+
 import time
-import os,sys
-from urllib.parse import urlparse
+import datetime
+
 import paho.mqtt.client as mqtt
 from parking_slot import ParkingSlot
 
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setwarnings(False)
+
+GPIO.setmode(GPIO.BOARD)    # Use physical pin numbering
+GPIO.setwarnings(False)     # Ignore warnings
 
 
 # slot1_sensor_pin = 29
 # slot2_sensor_pin = 31
-sensor_pins = [29, 31]
+slots_sensor_pins = [29, 31]
 
 # TODO: Add a RED and GREEN LEDs to indicate if there are slots available or not.
+led_pin = 7
+GPIO.setup(led_pin, GPIO.OUT, initial=GPIO.LOW)   # Set pin to be an output pin and set initial value to low (off)
 
 
 #
@@ -27,9 +31,11 @@ sensor_pins = [29, 31]
 # Initialize states
 slots = dict()
 
-for i in enumerate(range(sensor_pins), start=1):
-  slots[i] = ParkingSlot(sensor_pins[i], i)
-  GPIO.setup(sensor_pins[i], GPIO.IN)
+for i in enumerate(range(slots_sensor_pins), start=1):
+  slots[i] = ParkingSlot(slots_sensor_pins[i], i)
+  GPIO.setup(slots_sensor_pins[i], GPIO.IN)     # Set pin to be an input pin
+
+
 
 
 # TODO: Maybe these are not required
@@ -62,9 +68,13 @@ client.connect("broker.emqx.io", port=1883, keepalive=60)
 # We suppose this system administrated by the UdS, and is located specifically
 # at the Faculty of Sciences parking lot.
 PARKING_ID = "pk_ps/uds"
-SECTION = "science"
+SECTION = "sciences"
 TOPIC = f"{PARKING_ID}/{SECTION}"
 
+## NOTE: this should be done by the server
+# For this prototype, the number of sensors used is the total capacity of the parking lot
+remaining_slots = len(slots_sensor_pins)
+##
 
 while 1:
     # Print out results
@@ -79,11 +89,28 @@ while 1:
             # Update the saved state and publish
             parking_slot.state = slot_current_state
 
+            today: datetime = datetime.datetime.today()
+            date_str: str = today.date().strftime("%Y-%m-%d")
+            time_str: str = today.time().strftime("%H:%M:%S")
+            
+
             # Format of payload was defined as JSON:
-            #   { "id": id, "msg": status }
-            payload = {"id": parking_slot.id, "msg": parking_slot.state}
+            #   { "id": id, "status": status }
+            payload = { "id": parking_slot.id, "status": parking_slot.state, "date": date_str, "time": time_str }
             client.publish(topic=TOPIC, payload=payload)
             time.sleep(0.2)
 
-        # TODO: need to track if all slots are occupied. If so, turn an LED to RED
+            ## NOTE: the station's client should send us the status of the remaining_slots
+            # Increase by 1 if no car in the slot. Otherwise, decrease by 1
+            remaining_slots += 1 if parking_slot.state == 0 else -1
+            ##
+
+    ## NOTE: the station's client should send us the status of the remaining_slots. This should be on
+    # a MQTT callback on_message while subscribed to a specific topic
+    # Turn on if no remaining slots. Turn off otherwise
+    if remaining_slots == 0:
+        GPIO.output(led_pin, GPIO.HIGH) # Turn on
+    else:
+        GPIO.output(led_pin, GPIO.LOW)  # Turn off
+    ##
   
