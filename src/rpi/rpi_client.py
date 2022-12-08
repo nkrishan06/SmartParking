@@ -31,9 +31,9 @@ GPIO.setup(led_pin, GPIO.OUT, initial=GPIO.LOW)   # Set pin to be an output pin 
 # Initialize states
 slots = dict()
 
-for i in enumerate(range(slots_sensor_pins), start=1):
-  slots[i] = ParkingSlot(slots_sensor_pins[i], i)
-  GPIO.setup(slots_sensor_pins[i], GPIO.IN)     # Set pin to be an input pin
+for i, slot_pin in enumerate(slots_sensor_pins, start=1):
+  slots[i] = ParkingSlot(slot_pin, i)
+  GPIO.setup(slot_pin, GPIO.IN)     # Set pin to be an input pin
 
 
 
@@ -48,8 +48,8 @@ def on_connect(client, userdata, flags, rc):
     # client.subscribe(TOPIC)
     # print(f"subscribed to {TOPIC}")
     
-def on_publish(mosq, obj, mid):
-    print("mid: " + str(mid))
+def on_publish(client, userdata, mid):
+    print(f"mid: {mid}")
 
 
 #
@@ -82,10 +82,12 @@ while 1:
 
     # Read sensors
     for id, parking_slot in slots.items():
-        slot_current_state = GPIO.input(parking_slot.rpi_pin)
+        # Need to inverse the input, since the sensor returns: 0 occupied, 1 free
+        # We want 1 occupied, 0 free
+        slot_current_state = int(not GPIO.input(parking_slot.rpi_pin))
 
         # Check if there was a change in the saved state. If so, publish to the topic
-        if slot_current_state != parking_slot.status:
+        if slot_current_state != parking_slot.state:
             # Update the saved state and publish
             parking_slot.state = slot_current_state
 
@@ -95,9 +97,8 @@ while 1:
             
 
             # Format of payload was defined as JSON:
-            #   { "id": id, "status": status }
-            payload = { "id": parking_slot.id, "status": parking_slot.state, "date": date_str, "time": time_str }
-            client.publish(topic=TOPIC, payload=payload)
+            payload = f'{{ "id": "{parking_slot.id}", "status": "{parking_slot.state}", "date": "{date_str}", "time": "{time_str}" }}'
+            client.publish(topic=f"{TOPIC}/{parking_slot.id}", payload=payload)
             time.sleep(0.2)
 
             ## NOTE: the station's client should send us the status of the remaining_slots
